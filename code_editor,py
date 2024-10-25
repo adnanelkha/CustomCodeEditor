@@ -1,0 +1,223 @@
+import tkinter as tk
+from tkinter import ttk, messagebox, colorchooser, font
+from tkinter import filedialog
+import json
+import os
+
+class CustomTextEditor:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Custom Text Editor")
+        self.root.geometry("800x600")
+        
+        # Configuration file
+        self.config_file = "editor_config.json"
+        self.config = self.load_config()
+        
+        # Create the main text area
+        self.create_text_area()
+        
+        # Create menus
+        self.create_menus()
+        
+        # Current file being edited
+        self.current_file = None
+        
+        # Status bar
+        self.status_bar = ttk.Label(self.root, text="Ready", anchor=tk.W)
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        # Apply saved configuration
+        self.apply_config()
+
+    def load_config(self):
+        default_config = {
+            "font_family": "Arial",
+            "font_size": 12,
+            "bg_color": "#FFFFFF",
+            "fg_color": "#000000",
+            "tab_size": 4,
+            "wrap": True
+        }
+        
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r') as f:
+                    return json.load(f)
+            return default_config
+        except:
+            return default_config
+
+    def save_config(self):
+        with open(self.config_file, 'w') as f:
+            json.dump(self.config, f)
+
+    def create_text_area(self):
+        # Create a frame for the text area and scrollbars
+        self.text_frame = ttk.Frame(self.root)
+        self.text_frame.pack(expand=True, fill='both')
+        
+        # Create scrollbars
+        self.y_scrollbar = ttk.Scrollbar(self.text_frame)
+        self.y_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.x_scrollbar = ttk.Scrollbar(self.text_frame, orient=tk.HORIZONTAL)
+        self.x_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        # Create the text widget
+        self.text_area = tk.Text(
+            self.text_frame,
+            undo=True,
+            wrap=tk.WORD,
+            yscrollcommand=self.y_scrollbar.set,
+            xscrollcommand=self.x_scrollbar.set
+        )
+        self.text_area.pack(expand=True, fill='both')
+        
+        # Configure scrollbars
+        self.y_scrollbar.config(command=self.text_area.yview)
+        self.x_scrollbar.config(command=self.text_area.xview)
+        
+        # Bind keyboard shortcuts
+        self.text_area.bind('<Control-s>', lambda e: self.save_file())
+        self.text_area.bind('<Control-o>', lambda e: self.open_file())
+        self.text_area.bind('<Control-n>', lambda e: self.new_file())
+
+    def create_menus(self):
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # File Menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="New", command=self.new_file, accelerator="Ctrl+N")
+        file_menu.add_command(label="Open", command=self.open_file, accelerator="Ctrl+O")
+        file_menu.add_command(label="Save", command=self.save_file, accelerator="Ctrl+S")
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.root.quit)
+        
+        # Edit Menu
+        edit_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_command(label="Undo", command=self.text_area.edit_undo, accelerator="Ctrl+Z")
+        edit_menu.add_command(label="Redo", command=self.text_area.edit_redo, accelerator="Ctrl+Y")
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Cut", command=lambda: self.text_area.event_generate("<<Cut>>"))
+        edit_menu.add_command(label="Copy", command=lambda: self.text_area.event_generate("<<Copy>>"))
+        edit_menu.add_command(label="Paste", command=lambda: self.text_area.event_generate("<<Paste>>"))
+        
+        # Format Menu
+        format_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Format", menu=format_menu)
+        format_menu.add_command(label="Font...", command=self.choose_font)
+        format_menu.add_command(label="Text Color...", command=self.choose_text_color)
+        format_menu.add_command(label="Background Color...", command=self.choose_bg_color)
+        
+        # View Menu
+        view_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="View", menu=view_menu)
+        self.word_wrap_var = tk.BooleanVar(value=self.config["wrap"])
+        view_menu.add_checkbutton(label="Word Wrap", variable=self.word_wrap_var, command=self.toggle_word_wrap)
+
+    def new_file(self):
+        self.text_area.delete(1.0, tk.END)
+        self.current_file = None
+        self.root.title("Custom Text Editor - New File")
+        self.status_bar.config(text="New File")
+
+    def open_file(self):
+        file_path = filedialog.askopenfilename(
+            defaultextension=".txt",
+            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")]
+        )
+        if file_path:
+            try:
+                with open(file_path, 'r') as file:
+                    self.text_area.delete(1.0, tk.END)
+                    self.text_area.insert(1.0, file.read())
+                self.current_file = file_path
+                self.root.title(f"Custom Text Editor - {os.path.basename(file_path)}")
+                self.status_bar.config(text=f"Opened: {file_path}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not open file: {str(e)}")
+
+    def save_file(self):
+        if self.current_file:
+            try:
+                content = self.text_area.get(1.0, tk.END)
+                with open(self.current_file, 'w') as file:
+                    file.write(content)
+                self.status_bar.config(text=f"Saved: {self.current_file}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not save file: {str(e)}")
+        else:
+            self.save_file_as()
+
+    def save_file_as(self):
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")]
+        )
+        if file_path:
+            self.current_file = file_path
+            self.save_file()
+            self.root.title(f"Custom Text Editor - {os.path.basename(file_path)}")
+
+    def choose_font(self):
+        font_window = tk.Toplevel(self.root)
+        font_window.title("Font Settings")
+        font_window.geometry("300x200")
+        
+        # Font family selection
+        ttk.Label(font_window, text="Font Family:").pack(pady=5)
+        font_family = ttk.Combobox(font_window, values=list(font.families()))
+        font_family.set(self.config["font_family"])
+        font_family.pack(pady=5)
+        
+        # Font size selection
+        ttk.Label(font_window, text="Font Size:").pack(pady=5)
+        font_size = ttk.Spinbox(font_window, from_=8, to=72)
+        font_size.set(self.config["font_size"])
+        font_size.pack(pady=5)
+        
+        def apply_font():
+            self.config["font_family"] = font_family.get()
+            self.config["font_size"] = int(font_size.get())
+            self.apply_config()
+            self.save_config()
+            font_window.destroy()
+        
+        ttk.Button(font_window, text="Apply", command=apply_font).pack(pady=20)
+
+    def choose_text_color(self):
+        color = colorchooser.askcolor(color=self.config["fg_color"])[1]
+        if color:
+            self.config["fg_color"] = color
+            self.apply_config()
+            self.save_config()
+
+    def choose_bg_color(self):
+        color = colorchooser.askcolor(color=self.config["bg_color"])[1]
+        if color:
+            self.config["bg_color"] = color
+            self.apply_config()
+            self.save_config()
+
+    def toggle_word_wrap(self):
+        self.config["wrap"] = self.word_wrap_var.get()
+        self.text_area.config(wrap=tk.WORD if self.config["wrap"] else tk.NONE)
+        self.save_config()
+
+    def apply_config(self):
+        # Apply font settings
+        self.text_area.configure(
+            font=(self.config["font_family"], self.config["font_size"]),
+            bg=self.config["bg_color"],
+            fg=self.config["fg_color"],
+            wrap=tk.WORD if self.config["wrap"] else tk.NONE
+        )
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    editor = CustomTextEditor(root)
+    root.mainloop()
